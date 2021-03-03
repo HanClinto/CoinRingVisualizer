@@ -80,6 +80,23 @@ export class EngineService {
     imgData.data[i + 3] = a;
   }
 
+  // TODO:
+  // * Graphics improvement
+  //   * Add proper inside texture -- probably will need to add the front image to the same output texture and UV map it accordingly for the front / back image
+  //   * Add beveled outside bulge (optional)
+  //   * Add generic textures for knurled edge (optional)
+  //   * Add normal map for 3D effect on the coin surface
+  // * Import from Numista
+  //   * Read coin image
+  //   * Read coin diameter
+  //   * Read coin thickness (optional?  Not always present.)
+  //   * Track coin image orientation (whether the coin sides are both the same side up ↑↑ or flipped like american coinage ↑↓. That should help us with proper alignment)
+  // * GUI controls
+  //   * Set punch size
+  //   * Set coin download location
+  //   * Adjust ring interior size (does this stretch the ring thinner / thicker?)
+  //  
+
   public createScene(canvas: ElementRef<HTMLCanvasElement>): void {
     // Morgan back: https://en.numista.com/catalogue/photos/etats-unis/5ee614ca4780f9.05253990-original.jpg
     // Morgan front: https://en.numista.com/catalogue/photos/etats-unis/5ee614c99912c4.90093382-original.jpg
@@ -103,14 +120,22 @@ export class EngineService {
     var textureOutput = new DynamicTexture("dynamic texture", {width:DTWidth, height:DTHeight}, this.scene, true);
     var outputContext = textureOutput.getContext();
 
+    var bumpOutput = new DynamicTexture("dynamic bumpmap", {width:DTWidth, height:DTHeight}, this.scene, true);
+    var outputBumpContext = bumpOutput.getContext();
+
     var materialOutput = new StandardMaterial("Mat", this.scene);
     materialOutput.diffuseTexture = textureOutput;	
+    materialOutput.bumpTexture = bumpOutput;
     
     var materialInput = new StandardMaterial("MatInput", this.scene);
+    var bumpInput2 = new Texture("assets/textures/MorganDollarBackNormal.png", this.scene);
+    materialInput.bumpTexture = bumpInput2;
 
     var scene = this.scene;
     var img = new Image();
     img.src = 'assets/textures/MorganDollarBack.jpg';
+
+
     img.onload = function() {
       console.log("Texture loaded.  Building custom image...");
       let radius = img.width;
@@ -129,39 +154,6 @@ export class EngineService {
       console.log("Creating output imageData");
       let outData = outputContext.createImageData(DTWidth, DTHeight);
       console.log(`Loaded imageData for ${inData.data.length} input and ${outData.data.length} output`);
-/*
-      for (let ii = 0; ii < inData.data.length; ii += 4000) {
-        console.log(`Pixel ${ii}: ${inData.data[ii+0]}, ${inData.data[ii+1]}, ${inData.data[ii+2]}, ${inData.data[ii+3]}`);
-      }
-
-      for (let index = 0; index < outData.data.length; index += 4)
-      {
-        let i = index / 4;
-
-        let x = i % DTWidth;
-        let y = Math.floor(i / DTWidth);
-
-        var ix = x / DTWidth;
-        var iy = y / DTHeight;
-
-        let coords = EngineService.cartesianToPolar(ix, iy);
-
-        var ox = coords.x * img.width;
-        var oy = coords.y * img.height;
-
-        var inputindex = oy * 4 * img.width + ox * 4;
-
-        outData.data[index+0] = inData.data[inputindex+0];
-        outData.data[index+1] = inData.data[inputindex+1];
-        outData.data[index+2] = inData.data[inputindex+2];
-        outData.data[index+3] = 255; // inData.data[inputindex+3];
-      }
-
-      console.log("All done.  Writing back...");
-
-      outputContext.putImageData(outData, 0,0);
-      textureOutput.update();     
-      //*/     
 
       //Add image to dynamic texture
 
@@ -178,21 +170,59 @@ export class EngineService {
                 console.log(`Input (${ix},${iy}) = (${coords.x},${coords.y}) [(${coords.x* inData.width},${coords.y* inData.height})] : ${srcPixel.r}:${srcPixel.g}:${srcPixel.b}:${srcPixel.a}`);
               }
               EngineService.setPixel(x, y, outData, srcPixel.r, srcPixel.g, srcPixel.b, 255);
-              //EngineService.setPixel(x, y, outData, ix * 255, ix * 255, iy * 255, 255);
-
-              //outputContext.drawImage(img, 
-              //  coords.x * radius, coords.y * radius, inc, inc, 
-              //    x, y, inc, inc);
           }
       }
       outputContext.putImageData(outData, 0,0);
       textureOutput.update();
+    }
+
+    var bumpimg = new Image();
+    bumpimg.src = "assets/textures/MorganDollarBackNormal.png";
+
+    bumpimg.onload = function() {
+      console.log("Texture loaded.  Building custom image...");
+      let radius = bumpimg.width;
+
+      var bumpInput = new DynamicTexture("dynamic texture bump input", {width:bumpimg.width, height:bumpimg.height}, scene, false);
+      var inputContext = bumpInput.getContext();
+      inputContext.drawImage(bumpimg, 0,0, bumpimg.width, bumpimg.height);
+      console.log(`Getting input imageData for ${bumpimg.width}, ${bumpimg.height}`);
+      let inData = inputContext.getImageData(0,0,bumpimg.width, bumpimg.height);
+
+      bumpInput.update();
+
+      //outputBumpContext.drawImage(bumpimg, 0, 0, bumpimg.width, bumpimg.height, 0, 0, DTHeight, DTHeight);
+
+      console.log("Creating output imageData");
+      let outData = outputBumpContext.createImageData(DTWidth, DTHeight);
+      console.log(`Loaded imageData for ${inData.data.length} input and ${outData.data.length} output`);
+
+
+      //Add image to dynamic texture
+      const inc = 1;
+      console.log(`Input data is ${inData.width}x${inData.height}`);
+      for (let x = 0; x < DTWidth; x+= inc) {
+          for (let y = 0; y < DTHeight; y += inc) {
+              var ix = x / DTWidth;
+              var iy = y / DTHeight;
+              let coords = EngineService.cartesianToPolar(ix, iy);
+              
+              var srcPixel = EngineService.getPixel(coords.x * inData.width, coords.y * inData.height, inData);
+              if (x % 100 == 0 && y % 100 == 0) {
+                console.log(`Input (${ix},${iy}) = (${coords.x},${coords.y}) [(${coords.x* inData.width},${coords.y* inData.height})] : ${srcPixel.r}:${srcPixel.g}:${srcPixel.b}:${srcPixel.a}`);
+              }
+              EngineService.setPixel(x, y, outData, srcPixel.r, srcPixel.g, srcPixel.b, 255);
+          }
+      }
+      outputBumpContext.putImageData(outData, 0,0);
+      bumpOutput.update();
       
     }
 
     const faceUV = [];
     faceUV[0] =	new Vector4(0, 0, 0, 0);
-    faceUV[1] =	new Vector4(0, 0, 1, 0.75); // x, z swapped to flip image
+    //faceUV[1] =	new Vector4(0, 0, 1, 0.75); // x, z swapped to flip image
+    faceUV[1] =	new Vector4(1, 0.75, 0, 0); // x, z swapped to flip image
     faceUV[2] = new Vector4(0, 0, 1, 1);
 
     this.scene.ambientColor = new Color3(0.3, 0.3, 0.3);
