@@ -222,7 +222,7 @@ export class EngineService {
     const faceUV = [];
     faceUV[0] =	new Vector4(0, 0, 0, 0);
     //faceUV[1] =	new Vector4(0, 0, 1, 0.75); // x, z swapped to flip image
-    faceUV[1] =	new Vector4(1, 0.75, 0, 0); // x, z swapped to flip image
+    faceUV[1] =	new Vector4(0, 0, 1, 0.75); // x, z swapped to flip image
     faceUV[2] = new Vector4(0, 0, 1, 1);
 
     this.scene.ambientColor = new Color3(0.3, 0.3, 0.3);
